@@ -285,7 +285,8 @@ st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_mult
 if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
 
-st.markdown('''## To-do: 
+st.markdown('''
+## To-do: 
 - Download as XLSX (instead of CSV)
 - ~~Convert KNS UOM to AKB UOM~~
 - ~~Search BC item master using description 1, and autofill sys num~~
@@ -296,4 +297,10 @@ st.markdown('''## To-do:
     - ~~Unable to identify correct manufacturer~~
 - Function to extract sub-BOM for specific items
 - Interface to manually enter list + price for KNS quoted AVL parts (e.g. Pecko, Hisaka), and update parsed BOM accordingly
+- Interface to upload markup BOM (ECO pre-warning) and generate updated BOM
+    - Feature to highlight line items that are affected by upcoming ECO
+        - Reduction of volume
+        - Addition of volume
+        - Reworkability
+- Feature to diff two versions of Format D BOM
             ''')
