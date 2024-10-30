@@ -1,1 +1,7 @@
 streamlit
+xlsxwriter
+pandas
+datetime
+numpy
+openpyxl
+msal
