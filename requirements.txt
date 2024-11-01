@@ -5,3 +5,4 @@ datetime
 numpy
 openpyxl
 msal
+Office365-REST-Python-Client

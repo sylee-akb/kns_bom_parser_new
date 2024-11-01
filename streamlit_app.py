@@ -10,11 +10,18 @@ import requests, msal
 import json
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+from office365.sharepoint.client_context import ClientContext
+from office365.runtime.auth.client_credential import ClientCredential
+from office365.runtime.auth.authentication_context import AuthenticationContext
 
 tenant_id = st.secrets['bc_tenant_id']
 environment = 'Production'
 client_id = st.secrets['bc_client_id']
 client_secret = st.secrets['bc_client_secret']
+ctb_sharepoint_site_url = st.secrets['ctb_sharepoint_site_url']
+ctb_sharepoint_username = st.secrets['ctb_sharepoint_username']
+ctb_sharepoint_password = st.secrets['ctb_sharepoint_password']
+expendables_list_relative_path = 'Shared Documents/Stage Non-Inventorized Expendables List.xlsx'
 
 def parse_oracle_bom(bom_file_obj):
     with warnings.catch_warnings():
@@ -67,6 +74,9 @@ def parse_oracle_bom(bom_file_obj):
         else: #non-unique match
             return None
 
+    # Get Expendables List from Sharepoint
+    expendables_df = get_expendables_list(ctb_sharepoint_site_url,expendables_list_relative_path,client_id,client_secret)
+
     # Assign best-guess manufacturer
     bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna(),'Manufacturer'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna(),'MANUFACTURER_NAME']
     bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ','Manufacturer'] = 'AKRIBIS ASSY'
@@ -78,6 +88,9 @@ def parse_oracle_bom(bom_file_obj):
 
     # Match system number
     bom_df['System No.'] = bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(match_sys_no_description)
+
+    # Identify non-inventorized expendables
+    bom_df.loc[bom_df['System No.'].isna() & bom_df['ITEM_DESCRIPTION'].isin(expendables_df['Description'].unique()),'System No.'] = 'SVCSEI0A0001'
 
     # Fill unit costs for known items
     bom_df.loc[bom_df['System No.'].isin(item_master_df['System No.'].unique()),'Unit Cost [SGD]'] = bom_df.loc[bom_df['System No.'].isin(item_master_df['System No.'].unique()),'System No.'].apply(lambda s: item_master_df.loc[item_master_df['System No.']==s,'Unit Cost'].iloc[0]) 
@@ -242,7 +255,7 @@ def get_item_master(tenant_id,environment,client_id,client_secret):
     reqToken = getToken(tenant_id, client_id, client_secret)
 
     # Build the request URL
-    request_url = f"https://api.businesscentral.dynamics.com/v2.0/{tenant_id}/{environment}/api/v2.0/items?company=Akribis%20Systems%20Pte%20Ltd&$select=number,displayName,baseUnitOfMeasureCode,unitCost"
+    request_url = f"https://api.businesscentral.dynamics.com/v2.0/{tenant_id}/{environment}/api/v2.0/items?company=Akribis%20Systems%20Pte%20Ltd&$select=number,displayName,baseUnitOfMeasureCode,unitCost,type&$filter=type eq 'Inventory'"
 
     # Build the request Headers
     reqHeaders =  {"Accept-Language": "en-us", "Authorization": f"Bearer {reqToken['access_token']}", 'Prefer': 'odata.maxpagesize=10000'}
@@ -264,6 +277,47 @@ def get_item_master(tenant_id,environment,client_id,client_secret):
     item_master_df = item_master_df[['System No.','Description','UOM','Unit Cost']]
     
     return item_master_df
+
+@st.cache_data
+def get_expendables_list(site_url,expendables_file_rel_path,client_id, client_secret):  
+    ctx_auth = AuthenticationContext(site_url)
+    if ctx_auth.acquire_token_for_user(ctb_sharepoint_username, ctb_sharepoint_password):
+      context = ClientContext(site_url, ctx_auth)
+    
+    # context = ClientContext(site_url).with_credentials(
+    #                    ClientCredential(client_id, client_secret)
+    #                                )
+    
+    #download expendables_list to in-memory file
+    input_file = io.BytesIO(
+        context.web.get_file_by_server_relative_path(expendables_file_rel_path).get_content().execute_query().value
+        )
+
+    # filename = 'expendables_list.xlsx'
+    # with open(filename, 'wb') as output_file:
+    #     if verbose:
+    #          print('Downloading Expendables List...')
+    #     file = (
+    #         ctx.web.get_file_by_server_relative_url(expendables_list_relative_path)
+    #         .download(output_file)
+    #         .execute_query()
+    #     )
+    #     if verbose:
+    #         print('Expendables List downloaded.')
+            
+    #read expendables list into DataFrame
+    expendables_df = pd.read_excel(input_file,sheet_name='Sheet1',engine="openpyxl",skiprows=0,usecols='A:D',converters={
+        'Description':str,
+        'Description 2':str,
+        'Manufacturer':str,
+        'Status':str}
+                                          )
+    expendables_df = expendables_df[expendables_df['Status'] == 'Released']
+    expendables_df['Description'] = expendables_df['Description'].str.strip()
+    expendables_df['Description'] = expendables_df['Description'].str.upper()
+            
+    print(expendables_df.keys())
+    return expendables_df 
 
 # Streamlit session state declarations
 if 'session_state' not in st.session_state:
@@ -290,7 +344,8 @@ st.markdown('''
 - Download as XLSX (instead of CSV)
 - ~~Convert KNS UOM to AKB UOM~~
 - ~~Search BC item master using description 1, and autofill sys num~~
-- Match expendables items and assign service number
+- ~~Match expendables items and assign service number~~
+    - Switch over to using client id and secret to authenticate sharepoint instead of username and password
 - Flag lines with inconsistent UOM for manual attention
 - Highlight lines needing attention
     - ~~Unable to identify what item category~~
