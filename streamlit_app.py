@@ -385,5 +385,8 @@ st.markdown('''
         - Addition of qty (safe to buy according to old qty)
         - Not affected (safe to buy)
         - Reworkability (safe to buy, but more complicated)
+- Interface to upload zip file containing all drawings
+    - Match BOM line items to indicate which items have drawings
+    - Feature to directly send drawings to MFG docs repository
 - Feature to diff two versions of Format D BOM
             ''')
