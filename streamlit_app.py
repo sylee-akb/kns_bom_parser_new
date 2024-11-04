@@ -172,7 +172,7 @@ def populate_hier_num(bom_df,i):
     cur_bom_df.at[i,'Hierarchical No.'] = current_item_hier_num
     return cur_bom_df
 
-def parse_bom():
+def parse_input_bom():
     if st.session_state.bom_file is None:
         st.session_state.upload_state = "Upload a file first!"
     else:
@@ -196,6 +196,28 @@ def output_bom():
             st.session_state.bom_df.to_excel(writer, sheet_name='System BOM')
             (max_row, max_col) = st.session_state.bom_df.shape
             writer.sheets['System BOM'].autofilter(0, 0, max_row, max_col)
+
+def parse_markup_bom():
+    '''
+    Parses the markup BOM and returns a dataframe containing all linewise changes to be applied
+    Changes can be: change, add, delete only
+    Items to change are identified by a combination of part number + parent part number
+    '''
+
+def apply_markup_changes():
+    '''
+    Applies markout changes in markup_changes_df to bom_df, and returns a new dataframe with the changes
+    '''
+
+    return 0
+
+def diff_input_boms():
+    '''
+    Compares input BOM 1 (with markup changes applied, if any) with input BOM 2
+    and returns a dataframe showing the differences in a flattened way (material exposure only)
+    '''
+
+    return 0
 
 def getToken(tenant, client_id, client_secret):
     authority = "https://login.microsoftonline.com/" + tenant
@@ -333,11 +355,16 @@ if 'output_bom_file' not in st.session_state:
     st.session_state.output_bom_file = io.StringIO()
 
 # GUI elements
-st.title("KNS BOM Parser")
-st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_bom,label_visibility="visible")
+st.title("Input BOM 1")
+st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_input_bom,label_visibility="visible")
 
+st.title("Output BOM")
 if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
+
+st.title("Input Markup BOM")
+st.file_uploader('Upload source BOM:', key = 'markup_bom_file',type='xlsx', accept_multiple_files=False, on_change = apply_markup_changes,label_visibility="visible")
+
 
 st.markdown('''
 ## To-do: 
@@ -354,8 +381,9 @@ st.markdown('''
 - Interface to manually enter list + price for KNS quoted AVL parts (e.g. Pecko, Hisaka), and update parsed BOM accordingly
 - Interface to upload markup BOM (ECO pre-warning) and generate updated BOM
     - Feature to highlight line items that are affected by upcoming ECO
-        - Reduction of volume
-        - Addition of volume
-        - Reworkability
+        - Reduction of qty (not safe to buy)
+        - Addition of qty (safe to buy according to old qty)
+        - Not affected (safe to buy)
+        - Reworkability (safe to buy, but more complicated)
 - Feature to diff two versions of Format D BOM
             ''')
