@@ -208,7 +208,7 @@ def parse_dwg_zip():
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
         zip_df['Part No.'] = zip_df['File Name'].apply(filename_to_partno)
 
-        xip_df.loc[zip_df['File Type']=='STP','File Type'] == 'STEP'
+        zip_df.loc[zip_df['File Type']=='STP','File Type'] == 'STEP'
 
 
         st.session_state.zip_df = zip_df
