@@ -14,6 +14,7 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.client_credential import ClientCredential
 from office365.runtime.auth.authentication_context import AuthenticationContext
 import zipfile
+import re
 
 tenant_id = st.secrets['bc_tenant_id']
 environment = 'Production'
@@ -184,9 +185,8 @@ def parse_input_bom():
 
 def filename_to_partno(s):
     try:
-        part_no = '-'.join(s.split('-')[0:3]) + 'REV' + s.split('-')[3].split('.')[0]
-        if len(s.split('-')[3].split('.')[0])>2:
-            raise ValueError('Revision too long')
+        x = re.search(r"((?:\d|X){5})(?:-|_)((?:\d|X){4})(?:-|_)((?:\d|X){3})(?:-|_|__|--|\s+)?(?:\d\d?)?(?:-|_|__|--|\s+)?(?:REV)?(?:-|_|__|--|\s+)?([A-Z][A-Z]?)(?:-|_|__|--|\s+|\Z)", s)
+        part_no = '-'.join(x.groups()[0:3]) + 'REV' + x.groups()[3]
         return part_no
     except:
         return None
