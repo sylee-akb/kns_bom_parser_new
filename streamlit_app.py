@@ -209,8 +209,8 @@ def parse_dwg_zip():
         zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
         zip_df['Drawing No.'] = zip_df['File Name'].apply(filename_to_partno)
-        zip_df['Revision'] = zip_df['Drawing No.'].apply(lambda s: s.split('REV')[-1])
-        zip_df['Drawing No.'] = zip_df['Drawing No.'].apply(lambda s: s.split('REV')[0])
+        zip_df.loc[~zip_df['Drawing No.'].isna(),'Revision'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[-1])
+        zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[0])
 
         zip_df.loc[zip_df['File Type']=='STP','File Type'] = 'STEP'
 
