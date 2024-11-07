@@ -41,6 +41,8 @@ def parse_oracle_bom(bom_file_obj):
     bom_df['Unit Cost [SGD]'] = np.nan
     bom_df['Total Cost [SGD]'] = np.nan
     bom_df['WIP or Released'] = 'WIP'
+    bom_df['REV'] = bom_df['REV'].apply(lambda s: ''.join(filter(str.isalpha,s)))
+
     bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ', 'Hierarchical No.'] = '1'
     bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ', 'Obsolete'] = 'N'
     bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ', 'QTY'] = 1.0
