@@ -421,9 +421,7 @@ st.title('Output Drawings List')
 st.button('Update Drawing List', on_click = update_zip_df)
 if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
     modified_zip_df = st.data_editor(data=st.session_state.zip_df)
-    st.dataframe(data=st.session_state.zip_df)
-
-
+    # st.dataframe(data=st.session_state.zip_df)
 
 
 st.markdown('''
