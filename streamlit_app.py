@@ -13,6 +13,7 @@ from urllib3.util import Retry
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.client_credential import ClientCredential
 from office365.runtime.auth.authentication_context import AuthenticationContext
+import zipfile
 
 tenant_id = st.secrets['bc_tenant_id']
 environment = 'Production'
@@ -26,7 +27,7 @@ expendables_list_relative_path = 'Shared Documents/Stage Non-Inventorized Expend
 def parse_oracle_bom(bom_file_obj):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
-        bom_df = pd.read_excel(bom_file_obj,sheet_name=0,engine="openpyxl",skiprows=0,usecols=[*range(0, 20, 1)] ,converters={
+        bom_df = pd.read_excel(bom_file_obj,sheet_name=0,engine="openpyxl",skiprows=0,usecols=None ,converters={
             'BOM_LEVEL':str,
             'ITEM':str,
             'MANUFACTURING_ITEM':str,
@@ -56,8 +57,10 @@ def parse_oracle_bom(bom_file_obj):
     bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ', 'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[bom_df['BOM_LEVEL']=='TOP MODEL : ', 'ITEM']
 
     # Formulate part number (description 1)
+    bom_df.loc[bom_df['MANUFACTURER_NAME'] == 'OPTIONAL','MANUFACTURER_NAME'] = None
     bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'ITEM'] + 'REV' + bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'REV']
-    bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna(),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna(),'MANUFACTURER_PART_NUMBER']
+    bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'MANUFACTURER_PART_NUMBER']
+    bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'ITEM'] + 'REV' + bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'REV']
 
     # Get Item Master from BC
     item_master_df = get_item_master(tenant_id,environment,client_id,client_secret)
@@ -84,7 +87,7 @@ def parse_oracle_bom(bom_file_obj):
     bom_df.loc[bom_df['MANUFACTURER_NAME'].isna() & bom_df['ITEM_DESCRIPTION'].str.contains('CABLE COMPLEMENT') ,'Manufacturer'] = 'AKRIBIS ASSY'
     bom_df.loc[bom_df['MANUFACTURER_NAME'].isna() & bom_df['ITEM_DESCRIPTION'].str.startswith('CBL_') ,'Manufacturer'] = 'AKRIBIS CABLING'
     bom_df.loc[bom_df['MANUFACTURER_NAME'].isna() & bom_df['ITEM_DESCRIPTION'].str.startswith('TERM_') ,'Manufacturer'] = 'AKRIBIS CABLING'
-    bom_df.loc[bom_df['MANUFACTURER_NAME'].isna() & bom_df['Hierarchical No.'].apply(lambda s: not (s in set(bom_df['Parent']))),'Manufacturer'] = 'AKRIBIS FAB'
+    bom_df.loc[bom_df['MANUFACTURER_NAME'].isna() & bom_df['Description\n(Order Part No / Dwg No / REV No.)'].str.startswith('0') & bom_df['Hierarchical No.'].apply(lambda s: not (s in set(bom_df['Parent']))),'Manufacturer'] = 'AKRIBIS FAB'
 
     # Match system number
     bom_df['System No.'] = bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(match_sys_no_description)
@@ -178,6 +181,26 @@ def parse_input_bom():
     else:
         st.session_state.bom_df = parse_oracle_bom(st.session_state.bom_file)
         st.session_state.upload_state = "BOM parsed successfully!"
+
+def parse_dwg_zip():
+    if st.session_state.dwg_zip_file is None:
+        raise ValueError('Invalid dwg zip file')
+    else:
+        with zipfile.ZipFile(st.session_state.dwg_zip_file, 'r') as zf:
+            file_namelist = zf.namelist()
+
+        zip_df = pd.DataFrame(data  = file_namelist, columns =['File Name'])
+
+        zip_df['File Name'] = zip_df['File Name'].str.upper()
+        zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
+        zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
+        zip_df.loc[zip_df['File Type'] == 'PDF','Part No.'] = zip_df.loc[zip_df['File Type'] == 'PDF','File Name'].apply(lambda s: '-'.join(s.split('-')[0:3]) + 'REV' + s.split('-')[3].split('.')[0] )
+
+
+        st.session_state.zip_df = zip_df
+
+        st.session_state.upload_state = "BOM parsed successfully!"
+    return 0
 
 def output_bom():
     if st.session_state.bom_df is None:
@@ -338,7 +361,6 @@ def get_expendables_list(site_url,expendables_file_rel_path,client_id, client_se
     expendables_df['Description'] = expendables_df['Description'].str.strip()
     expendables_df['Description'] = expendables_df['Description'].str.upper()
             
-    print(expendables_df.keys())
     return expendables_df 
 
 # Streamlit session state declarations
@@ -354,16 +376,23 @@ if 'output_bom_df' not in st.session_state:
 if 'output_bom_file' not in st.session_state:
     st.session_state.output_bom_file = io.StringIO()
 
+if 'zip_df' not in st.session_state:
+    st.session_state.zip_df = io.StringIO()
+
 # GUI elements
 st.title("Input BOM 1")
 st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_input_bom,label_visibility="visible")
+st.file_uploader('Upload drawings zip file:', key = 'dwg_zip_file',type='zip', accept_multiple_files=False, on_change = parse_dwg_zip,label_visibility="visible")
+st.file_uploader('Upload markup BOM:', key = 'markup_bom_file',type='xlsx', accept_multiple_files=False, on_change = apply_markup_changes,label_visibility="visible")
 
 st.title("Output BOM")
 if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
 
-st.title("Input Markup BOM")
-st.file_uploader('Upload source BOM:', key = 'markup_bom_file',type='xlsx', accept_multiple_files=False, on_change = apply_markup_changes,label_visibility="visible")
+st.title('Output Drawings List')
+if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
+    st.dataframe(data=st.session_state.zip_df)
+
 
 
 st.markdown('''
