@@ -208,7 +208,9 @@ def parse_dwg_zip():
         zip_df['File Name'] = zip_df['File Name'].str.upper()
         zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
-        zip_df['Part No.'] = zip_df['File Name'].apply(filename_to_partno)
+        zip_df['Drawing No.'] = zip_df['File Name'].apply(filename_to_partno)
+        zip_df['Revision'] = zip_df['Drawing No.'].apply(lambda s: s.split('REV')[-1])
+        zip_df['Drawing No.'] = zip_df['Drawing No.'].apply(lambda s: s.split('REV')[0])
 
         zip_df.loc[zip_df['File Type']=='STP','File Type'] = 'STEP'
 
@@ -379,7 +381,10 @@ def get_expendables_list(site_url,expendables_file_rel_path,client_id, client_se
     return expendables_df 
 
 def bom_file_check(part_number,file_type):
-    return part_number in st.session_state.zip_df.loc[st.session_state.zip_df['File Type']==file_type,'Part No.'].unique()
+    try:    
+        return len(st.session_state.zip_df[(st.session_state.zip_df['Drawing No.'].apply(lambda r: re.search('\A' + r,part_number) != None)) * st.session_state.zip_df['File Type']==file_type]) > 0
+    except:
+        return False
 
 def update_zip_df():
     '''
