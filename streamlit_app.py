@@ -133,11 +133,13 @@ def populate_hier_num(bom_df,i):
         return cur_bom_df
     parent_hier_num_list = cur_bom_df.loc[cur_bom_df['ITEM']==cur_bom_df.at[i,'MANUFACTURING_ITEM'],'Hierarchical No.']
     # print(parent_hier_num_list)
-    if len(parent_hier_num_list) > 1:
-        raise ValueError('Duplicate parent found')
     if len(parent_hier_num_list) < 1:
-        raise ValueError('Parent not found.')
-    parent_hier_num = parent_hier_num_list.iloc[0]
+        raise ValueError('Parent not found: ' + cur_bom_df.at[i,'ITEM'])
+    elif len(parent_hier_num_list) > 1:
+        parent_hier_num = parent_hier_num_list.loc[parent_hier_num_list.index[parent_hier_num_list.index<i].max()]
+        # raise ValueError('Duplicate parent found: '+ cur_bom_df.at[i,'ITEM'])
+    else:
+        parent_hier_num = parent_hier_num_list.iloc[0]
     if pd.isna(parent_hier_num): #recursively assign hierarchical number for the parent if it does not yet exist
         # print('recursion')
         cur_bom_df = populate_hier_num(cur_bom_df,bom_df.index(cur_bom_df['ITEM'] == cur_bom_df.iloc[i]['MANUFACTURING_ITEM']).iloc[0])
@@ -206,9 +208,11 @@ def parse_dwg_zip():
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
         zip_df['Part No.'] = zip_df['File Name'].apply(filename_to_partno)
 
+        xip_df.loc[zip_df['File Type']=='STP','File Type'] == 'STEP'
+
 
         st.session_state.zip_df = zip_df
-
+        
         st.session_state.upload_state = "BOM parsed successfully!"
     return 0
 
@@ -373,6 +377,21 @@ def get_expendables_list(site_url,expendables_file_rel_path,client_id, client_se
             
     return expendables_df 
 
+def bom_file_check(part_number,file_type):
+    return part_number in st.session_state.zip_df.loc[st.session_state.zip_df['File Type']==file_type,'Part No.'].unique()
+
+def update_zip_df():
+    '''
+    Updates zip_df to apply manual edits made by user through data_editor interface.
+    If bom_df is a dataframe, also calls the idempotent bom_file_check to match drawings to BOM lines
+    '''
+    if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
+        st.session_state.zip_df = modified_zip_df
+        if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
+            st.session_state.bom_df['Drawing?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'PDF'))
+            st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'STEP'))
+            
+
 # Streamlit session state declarations
 if 'session_state' not in st.session_state:
     st.session_state.upload_state = 'Pending file upload'
@@ -387,7 +406,7 @@ if 'output_bom_file' not in st.session_state:
     st.session_state.output_bom_file = io.StringIO()
 
 if 'zip_df' not in st.session_state:
-    st.session_state.zip_df = io.StringIO()
+    st.session_state.zip_df = None
 
 # GUI elements
 st.title("Input BOM 1")
@@ -400,8 +419,11 @@ if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
 
 st.title('Output Drawings List')
+st.button('Update Drawing List', on_click = update_zip_df)
 if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
+    modified_zip_df = st.data_editor(data=st.session_state.zip_df)
     st.dataframe(data=st.session_state.zip_df)
+
 
 
 
