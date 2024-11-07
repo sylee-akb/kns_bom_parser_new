@@ -188,7 +188,8 @@ def filename_to_partno(s):
         x = re.search(r"((?:\d|X){5})(?:-|_)((?:\d|X){4})(?:-|_)((?:\d|X){3})(?:-|_|__|--|\s+)?(?:\d\d?)?(?:-|_|__|--|\s+)?(?:REV)?(?:-|_|__|--|\s+)?([A-Z][A-Z]?)(?:-|_|__|--|\s+|\Z)", s)
         part_no = '-'.join(x.groups()[0:3]) + 'REV' + x.groups()[3]
         return part_no
-    except:
+    except Exception as err:
+        print(err)
         return None
 
 def parse_dwg_zip():
@@ -203,7 +204,7 @@ def parse_dwg_zip():
         zip_df['File Name'] = zip_df['File Name'].str.upper()
         zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
-        zip_df.loc[zip_df['File Type'] == 'PDF','Part No.'] = zip_df.loc[zip_df['File Type'] == 'PDF','File Name'].apply(filename_to_partno)
+        zip_df['Part No.'] = zip_df['File Name'].apply(filename_to_partno)
 
 
         st.session_state.zip_df = zip_df
