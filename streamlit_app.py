@@ -182,6 +182,15 @@ def parse_input_bom():
         st.session_state.bom_df = parse_oracle_bom(st.session_state.bom_file)
         st.session_state.upload_state = "BOM parsed successfully!"
 
+def filename_to_partno(s):
+    try:
+        part_no = '-'.join(s.split('-')[0:3]) + 'REV' + s.split('-')[3].split('.')[0]
+        if len(s.split('-')[3].split('.')[0])>2:
+            raise ValueError('Revision too long')
+        return part_no
+    except:
+        return None
+
 def parse_dwg_zip():
     if st.session_state.dwg_zip_file is None:
         raise ValueError('Invalid dwg zip file')
@@ -194,7 +203,7 @@ def parse_dwg_zip():
         zip_df['File Name'] = zip_df['File Name'].str.upper()
         zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
         zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
-        zip_df.loc[zip_df['File Type'] == 'PDF','Part No.'] = zip_df.loc[zip_df['File Type'] == 'PDF','File Name'].apply(lambda s: '-'.join(s.split('-')[0:3]) + 'REV' + s.split('-')[3].split('.')[0] )
+        zip_df.loc[zip_df['File Type'] == 'PDF','Part No.'] = zip_df.loc[zip_df['File Type'] == 'PDF','File Name'].apply(filename_to_partno)
 
 
         st.session_state.zip_df = zip_df
