@@ -197,20 +197,20 @@ def filename_to_partno(s):
         return None
 
 def parse_dwg_zip():
-    if st.session_state.dwg_zip_file is None:
-        raise ValueError('Invalid dwg zip file')
+    if st.session_state.input_dwg_zip_file is None:
+        print('Invalid dwg zip file')
     else:
-        with zipfile.ZipFile(st.session_state.dwg_zip_file, 'r') as zf:
+        with zipfile.ZipFile(st.session_state.input_dwg_zip_file, 'r') as zf:
             file_namelist = zf.namelist()
 
         zip_df = pd.DataFrame(data  = file_namelist, columns =['File Name'])
 
-        zip_df['File Name'] = zip_df['File Name'].str.upper()
-        zip_df['File Type'] = zip_df['File Name'].apply(lambda s: s.split('.')[-1])
-        zip_df['File Name'] = zip_df['File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
-        zip_df['Drawing No.'] = zip_df['File Name'].apply(filename_to_partno)
-        zip_df.loc[~zip_df['Drawing No.'].isna(),'Revision'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[-1])
-        zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[0])
+        zip_df['Cleaned File Name'] = zip_df['File Name'].str.upper()
+        zip_df['File Type'] = zip_df['Cleaned File Name'].apply(lambda s: s.split('.')[-1])
+        zip_df['Cleaned File Name'] = zip_df['Cleaned File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
+        zip_df['Drawing No.'] = zip_df['Cleaned File Name'].apply(filename_to_partno)
+        # zip_df.loc[~zip_df['Drawing No.'].isna(),'Revision'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[-1])
+        # zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[0])
 
         zip_df.loc[zip_df['File Type']=='STP','File Type'] = 'STEP'
 
@@ -387,13 +387,35 @@ def bom_file_check(part_number,file_type):
         print(err)
         return False
 
+def rename_file_to_new_zip(original_filename, zip_df, input_zip_file_obj, output_zip_file_obj):
+    try:
+        new_filename = zip_df.loc[zip_df['File Name'] == original_filename, 'Drawing No.'].iloc[0]
+        new_extension = zip_df.loc[zip_df['File Name'] == original_filename, 'File Type'].iloc[0]
+        new_filename = new_filename + '.' + new_extension
+    except Exception as err:
+        print('Problem finding original file: ' + str(original_filename))
+
+    
+    if not type(new_filename) == str:
+        print(original_filename + ' not saved. Missing dwg number.')
+        return 1
+    
+    file_contents = input_zip_file_obj.read(original_filename)
+    output_zip_file_obj.writestr(zinfo_or_arcname = new_filename, data = file_contents)
+    return 0
+
 def update_zip_df():
     '''
     Updates zip_df to apply manual edits made by user through data_editor interface.
     If bom_df is a dataframe, also calls the idempotent bom_file_check to match drawings to BOM lines
+    It also calls 
     '''
     if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
         st.session_state.zip_df = modified_zip_df
+        st.session_state.output_dwg_zip_file = io.BytesIO()
+        with zipfile.ZipFile(st.session_state.output_dwg_zip_file, 'w') as out_zf:
+            with zipfile.ZipFile(st.session_state.input_dwg_zip_file, 'r') as in_zf:
+                st.session_state.zip_df['File Name'].apply(rename_file_to_new_zip,args=(st.session_state.zip_df,in_zf,out_zf))
         if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
             st.session_state.bom_df['Drawing?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'PDF'))
             st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'STEP'))
@@ -415,10 +437,13 @@ if 'output_bom_file' not in st.session_state:
 if 'zip_df' not in st.session_state:
     st.session_state.zip_df = None
 
+if 'output_dwg_zip_file' not in st.session_state:
+    st.session_state.output_dwg_zip_file = None
+
 # GUI elements
-st.title("Input BOM 1")
+st.title("Input BOM")
 st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_input_bom,label_visibility="visible")
-st.file_uploader('Upload drawings zip file:', key = 'dwg_zip_file',type='zip', accept_multiple_files=False, on_change = parse_dwg_zip,label_visibility="visible")
+st.file_uploader('Upload drawings zip file:', key = 'input_dwg_zip_file',type='zip', accept_multiple_files=False, on_change = parse_dwg_zip,label_visibility="visible")
 st.file_uploader('Upload markup BOM:', key = 'markup_bom_file',type='xlsx', accept_multiple_files=False, on_change = apply_markup_changes,label_visibility="visible")
 
 st.title("Output BOM")
@@ -426,10 +451,12 @@ if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
 
 st.title('Output Drawings List')
-st.button('Update Drawing List', on_click = update_zip_df)
 if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
+    st.button('Update Drawing List', on_click = update_zip_df)
+    if st.session_state.output_dwg_zip_file != None:
+        st.download_button('Download Cleaned Drawings', st.session_state.output_dwg_zip_file, file_name='output_dwgs.zip')
     modified_zip_df = st.data_editor(data=st.session_state.zip_df)
-    # st.dataframe(data=st.session_state.zip_df)
+    
 
 
 st.markdown('''
@@ -452,7 +479,8 @@ st.markdown('''
         - Not affected (safe to buy)
         - Reworkability (safe to buy, but more complicated)
 - Interface to upload zip file containing all drawings
-    - Match BOM line items to indicate which items have drawings
+    - ~~Match BOM line items to indicate which items have drawings~~
+    - Feature to download zip file with drawings and step files renamed in standard dwg number format
     - Feature to directly send drawings to MFG docs repository
 - Feature to diff two versions of Format D BOM
             ''')
