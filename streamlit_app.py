@@ -384,11 +384,15 @@ def get_expendables_list(site_url,expendables_file_rel_path,client_id, client_se
     return expendables_df 
 
 def bom_file_check(part_number,file_type):
+    '''
+    Returns number of files matching file type and drawing no. for a particular part number.
+    '''
     try:    
-        return len(st.session_state.zip_df[(st.session_state.zip_df['Drawing No.'].apply(lambda r: False if not type(r) == str else re.search(r'\A' + re.escape(r),part_number) != None)) * st.session_state.zip_df['File Type']==file_type]) > 0
+        return len(st.session_state.zip_df[(st.session_state.zip_df['Drawing No.'].apply(
+            lambda r: False if type(r) != str else re.search(r'\A' + r,part_number) != None)) & (st.session_state.zip_df['File Type']==file_type)])
     except Exception as err:
-        print(err)
-        return False
+        print('Error on: ' + str(part_number))
+        return -1
 
 def rename_file_to_new_zip(original_filename, zip_df, input_zip_file_obj, output_zip_file_obj):
     try:
@@ -420,8 +424,11 @@ def update_zip_df():
             with zipfile.ZipFile(st.session_state.input_dwg_zip_file, 'r') as in_zf:
                 st.session_state.zip_df['File Name'].apply(rename_file_to_new_zip,args=(st.session_state.zip_df,in_zf,out_zf))
         if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
-            st.session_state.bom_df['Drawing?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'PDF'))
-            st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: bom_file_check(s,'STEP'))
+            st.session_state.bom_df['Drawing?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'PDF') > 0 else False)
+            st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 0 else False)
+            st.session_state.bom_df['Drawing Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'PDF') > 1 else False)
+            st.session_state.bom_df['STEP Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 1 else False)
+            
             
 
 # Streamlit session state declarations
@@ -483,7 +490,7 @@ st.markdown('''
         - Reworkability (safe to buy, but more complicated)
 - Interface to upload zip file containing all drawings
     - ~~Match BOM line items to indicate which items have drawings~~
-    - Feature to download zip file with drawings and step files renamed in standard dwg number format
+    - ~~Feature to download zip file with drawings and step files renamed in standard dwg number format~~
     - Feature to directly send drawings to MFG docs repository
 - Feature to diff two versions of Format D BOM
             ''')
