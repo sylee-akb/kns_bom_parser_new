@@ -62,7 +62,7 @@ def parse_oracle_bom(bom_file_obj):
     # Formulate part number (description 1)
     bom_df.loc[bom_df['MANUFACTURER_NAME'] == 'OPTIONAL','MANUFACTURER_NAME'] = None
     bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'ITEM'] + 'REV' + bom_df.loc[bom_df['MANUFACTURER_NAME'].isna(),'REV']
-    bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'MANUFACTURER_PART_NUMBER']
+    bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & ~bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'MANUFACTURER_PART_NUMBER'].astype('str')
     bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'Description\n(Order Part No / Dwg No / REV No.)'] = bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'ITEM'] + 'REV' + bom_df.loc[~bom_df['MANUFACTURER_NAME'].isna() & bom_df['MANUFACTURER_PART_NUMBER'].isin(['N.A.','N.A','N/A','-']),'REV']
 
     # Get Item Master from BC
