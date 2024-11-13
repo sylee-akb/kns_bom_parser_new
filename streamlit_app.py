@@ -428,7 +428,21 @@ def update_zip_df():
             st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 0 else False)
             st.session_state.bom_df['Drawing Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'PDF') > 1 else False)
             st.session_state.bom_df['STEP Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 1 else False)
-            
+
+def update_bom_df():
+    '''
+    Updates bom_df to apply manual edits made by user through data_editor interface.
+    If bom_df is a dataframe, also calls the idempotent bom_file_check to match drawings to BOM lines
+    It also calls 
+    '''
+    if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
+        st.session_state.bom_df = modified_bom_df
+ 
+        if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
+            st.session_state.bom_df['Drawing?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'PDF') > 0 else False)
+            st.session_state.bom_df['STEP?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 0 else False)
+            st.session_state.bom_df['Drawing Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'PDF') > 1 else False)
+            st.session_state.bom_df['STEP Duplicated?'] = st.session_state.bom_df['Description\n(Order Part No / Dwg No / REV No.)'].apply(lambda s: True if bom_file_check(s,'STEP') > 1 else False)           
             
 
 # Streamlit session state declarations
@@ -452,13 +466,14 @@ if 'output_dwg_zip_file' not in st.session_state:
 
 # GUI elements
 st.title("Input BOM")
-st.file_uploader('Upload source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_input_bom,label_visibility="visible")
+st.file_uploader('Upload K&S source BOM:', key = 'bom_file',type='xlsx', accept_multiple_files=False, on_change = parse_input_bom,label_visibility="visible")
 st.file_uploader('Upload drawings zip file:', key = 'input_dwg_zip_file',type='zip', accept_multiple_files=False, on_change = parse_dwg_zip,label_visibility="visible")
 st.file_uploader('Upload markup BOM:', key = 'markup_bom_file',type='xlsx', accept_multiple_files=False, on_change = apply_markup_changes,label_visibility="visible")
 
 st.title("Output BOM")
 if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
-    st.dataframe(data=st.session_state.bom_df.style.highlight_null(color='pink',subset=['System No.','Manufacturer']))
+    st.button('Update BOM', on_click = update_bom_df)
+    modified_bom_df = st.data_editor(data=st.session_state.bom_df)
 
 st.title('Output Drawings List')
 if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
