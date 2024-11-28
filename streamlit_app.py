@@ -210,7 +210,7 @@ def parse_dwg_zip():
 
         zip_df['Cleaned File Name'] = zip_df['File Name'].str.upper()
         zip_df['File Type'] = zip_df['Cleaned File Name'].apply(lambda s: s.split('.')[-1])
-        zip_df['Cleaned File Name'] = zip_df['Cleaned File Name'].apply(lambda s: ''.join(s.split('.')[:-1]))
+        zip_df['Cleaned File Name'] = zip_df['Cleaned File Name'].apply(lambda s: ''.join(s.rsplit('.',1)[:-1]))
         zip_df['Drawing No.'] = zip_df['Cleaned File Name'].apply(filename_to_partno)
         # zip_df.loc[~zip_df['Drawing No.'].isna(),'Revision'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[-1])
         # zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'] = zip_df.loc[~zip_df['Drawing No.'].isna(),'Drawing No.'].apply(lambda s: s.split('REV')[0])
