@@ -125,7 +125,7 @@ def parse_oracle_bom(bom_file_obj):
     bom_df['Qty'] = bom_df['QTY']
 
     bom_df = bom_df[['Hierarchical No.','System No.','Description\n(Order Part No / Dwg No / REV No.)','Description 2\n(Description / Dwg Title)','Qty','UOM','Unit Cost [SGD]','Total Cost [SGD]','Manufacturer','Drawing Reference','WIP or Released','Obsolete','Parent']]
-    return bom_df
+    return (bom_df, bom_df.loc[bom_df['Hierarchical No.'] == '1','Description\n(Order Part No / Dwg No / REV No.)'].iloc[0])
 
 def populate_hier_num(bom_df,i):
     cur_bom_df = bom_df.copy(deep=True)
@@ -184,7 +184,7 @@ def parse_input_bom():
     if st.session_state.bom_file is None:
         st.session_state.upload_state = "Upload a file first!"
     else:
-        st.session_state.bom_df = parse_oracle_bom(st.session_state.bom_file)
+        (st.session_state.bom_df,st.session_state.fg_part_number) = parse_oracle_bom(st.session_state.bom_file)
         st.session_state.upload_state = "BOM parsed successfully!"
 
 def filename_to_partno(s):
@@ -226,6 +226,8 @@ def output_bom():
     if st.session_state.bom_df is None:
         st.session_state["upload_state"] = "Upload a file first!"
     else:
+        if st.session_state.output_bom_file is None:
+            st.session_state.output_bom_file = io.BytesIO()
         with pd.ExcelWriter(st.session_state.output_bom_file,engine='xlsxwriter') as writer:
             workbook = writer.book
             header_format = workbook.add_format(
@@ -449,6 +451,9 @@ def update_bom_df():
 if 'session_state' not in st.session_state:
     st.session_state.upload_state = 'Pending file upload'
 
+if 'fg_part_number' not in st.session_state:
+    st.session_state.fg_part_number = None
+
 if 'bom_df' not in st.session_state:
     st.session_state.bom_df = None
 
@@ -456,7 +461,7 @@ if 'output_bom_df' not in st.session_state:
     st.session_state.output_bom_df = None
 
 if 'output_bom_file' not in st.session_state:
-    st.session_state.output_bom_file = io.StringIO()
+    st.session_state.output_bom_file = None
 
 if 'zip_df' not in st.session_state:
     st.session_state.zip_df = None
@@ -473,13 +478,16 @@ st.file_uploader('Upload markup BOM:', key = 'markup_bom_file',type='xlsx', acce
 st.title("Output BOM")
 if type(st.session_state.bom_df) == pd.core.frame.DataFrame:
     st.button('Update BOM', on_click = update_bom_df)
+    st.button('Output BOM', on_click = output_bom)
+    if st.session_state.output_bom_file != None:
+        st.download_button('Download Parsed BOM', st.session_state.output_bom_file, file_name = st.session_state.fg_part_number + ' BOM.xlsx')
     modified_bom_df = st.data_editor(data=st.session_state.bom_df)
 
 st.title('Output Drawings List')
 if type(st.session_state.zip_df) == pd.core.frame.DataFrame:
     st.button('Update Drawing List', on_click = update_zip_df)
     if st.session_state.output_dwg_zip_file != None:
-        st.download_button('Download Cleaned Drawings', st.session_state.output_dwg_zip_file, file_name='output_dwgs.zip')
+        st.download_button('Download Cleaned Drawings', st.session_state.output_dwg_zip_file, file_name=st.session_state.fg_part_number + ' Cleaned Drawings.zip')
     modified_zip_df = st.data_editor(data=st.session_state.zip_df)
     
 
